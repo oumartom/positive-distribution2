@@ -1,29 +1,41 @@
-// Charger .env depuis la racine OU depuis backend/
-require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
-if (!process.env.DB_HOST) require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-
 const mysql = require('mysql2/promise');
 
+// Lire toutes les variables possibles
+const host     = process.env.MYSQLHOST     || process.env.DB_HOST     || 'localhost';
+const port     = parseInt(process.env.MYSQLPORT     || process.env.DB_PORT     || '3306');
+const user     = process.env.MYSQLUSER     || process.env.DB_USER     || 'root';
+const password = process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '';
+const database = process.env.MYSQLDATABASE || process.env.DB_NAME     || 'railway';
+
+// Log pour déboguer sur Railway
+console.log('═══════════════════════════════════════');
+console.log('DB CONFIG:');
+console.log('  host    :', host);
+console.log('  port    :', port);
+console.log('  user    :', user);
+console.log('  database:', database);
+console.log('  password:', password ? '***défini***' : '⚠️ VIDE');
+console.log('═══════════════════════════════════════');
+
 const pool = mysql.createPool({
-  host:             process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT)   || 3306,
-  user:             process.env.DB_USER     || 'root',
-  password:         process.env.DB_PASSWORD || 'oumartom',
-  database:         process.env.DB_NAME     || 'positive_distribution',
+  host, port, user, password, database,
   waitForConnections: true,
-  connectionLimit:  10,
-  queueLimit:       0,
-  timezone:         '+00:00',
-  charset:          'utf8mb4'
+  connectionLimit:    10,
+  queueLimit:         0,
+  connectTimeout:     30000,
+  ssl: { rejectUnauthorized: false }
 });
 
 pool.getConnection()
   .then(conn => {
-    console.log(`✅ MySQL connecté — ${process.env.DB_NAME || 'positive_distribution'}`);
+    console.log('✅ MySQL connecté —', database);
     conn.release();
   })
   .catch(err => {
-    console.error('❌ Erreur MySQL :', err.message);
+    console.error('❌ Erreur MySQL complète :', err.message);
+    console.error('   Code      :', err.code);
+    console.error('   errno     :', err.errno);
+    console.error('   sqlState  :', err.sqlState);
     process.exit(1);
   });
 
