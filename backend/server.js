@@ -1,5 +1,5 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-if (!process.env.DB_HOST) require('dotenv').config();
+if (!process.env.MYSQLHOST && !process.env.DB_HOST) require('dotenv').config();
 
 const express = require('express');
 const cors    = require('cors');
@@ -30,12 +30,16 @@ const storage = multer.diskStorage({
   filename:    (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random()*1e9) + path.extname(file.originalname))
 });
 const upload = multer({ storage, limits: { fileSize: 10*1024*1024 } });
+
 app.post('/api/upload', require('./middleware/auth'), upload.single('fichier'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier' });
   res.json({ url: `/uploads/${req.file.filename}`, nom: req.file.originalname });
 });
 
-// Routes
+// Health check — Railway vérifie que le serveur répond
+app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+// Routes API
 app.use('/api/auth',    require('./routes/auth'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/ventes',  require('./routes/ventes'));
@@ -45,16 +49,17 @@ app.use('/api',         require('./routes/autres'));
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
 
+// ── DÉMARRAGE IMMÉDIAT — sans attendre MySQL ──────────────
 const PORT = process.env.PORT || 3001;
-
-// Init BD puis démarrer
-require('./init-db')().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Positive Distribution v4`);
-    console.log(`   ➜  http://localhost:${PORT}`);
-    console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME}\n`);
-  });
-}).catch(e => {
-  console.error('Erreur démarrage:', e.message);
-  process.exit(1);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚀 Positive Distribution v4 démarré`);
+  console.log(`   ➜  PORT: ${PORT}`);
+  console.log(`   ➜  ENV: ${process.env.NODE_ENV || 'development'}\n`);
 });
+
+// Init BD en arrière-plan après démarrage du serveur
+setTimeout(() => {
+  require('./init-db')()
+    .then(() => console.log('✅ BD initialisée'))
+    .catch(e => console.error('⚠️  Init BD:', e.message));
+}, 3000);
